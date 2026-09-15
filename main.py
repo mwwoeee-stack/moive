@@ -2,108 +2,122 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 
-# 1. 페이지 기본 설정 (넓은 화면, 다크 테마 느낌)
+# 1. 페이지 설정
 st.set_page_config(
-    page_title="시네마 애니메이션 박스오피스",
-    page_icon="🍿",
+    page_title="시네마 애니메이션 전당",
+    page_icon="🎬",
     layout="wide"
 )
 
-# 2. 영화관 배경 영상 및 시네마 스타일 CSS 주입
-cinema_css_and_bg = """
-<style>
-/* 배경 비디오 스타일 */
-#bg-video {
-    position: fixed;
-    right: 0;
-    bottom: 0;
-    min-width: 100%;
-    min-height: 100%;
-    width: auto;
-    height: auto;
-    z-index: -2;
-    object-fit: cover;
-    filter: brightness(0.28) contrast(1.15) saturate(1.1); /* 텍스트 가독성을 위해 어둡게 처리 */
-}
+# 2. 사이드바 - 테마 영상 선택 옵션
+st.sidebar.markdown("### 📽️ 극장 환경 설정")
+bg_option = st.sidebar.radio(
+    "영화관 스크린 영상 선택",
+    ["1. 클래식 영사실 빔 (추천)", "2. 레트로 필름 카운트다운", "3. 고요한 심야 상영관"]
+)
 
-/* 영화관 앰비언트 오버레이 (비네팅 및 극장 분위기) */
-.theater-overlay {
+# 선택에 따른 고화질 비디오 URL
+video_urls = {
+    "1. 클래식 영사실 빔 (추천)": "https://cdn.pixabay.com/video/2020/05/25/40130-424930030_large.mp4",
+    "2. 레트로 필름 카운트다운": "https://cdn.pixabay.com/video/2019/04/23/23011-332464733_large.mp4",
+    "3. 고요한 심야 상영관": "https://cdn.pixabay.com/video/2020/04/17/36413-410972412_large.mp4"
+}
+selected_video = video_urls[bg_option]
+
+# 3. 영화관 인테리어 CSS (붉은 벨벳 좌석 실루엣 + 앰비언트 라이트)
+theater_style = f"""
+<style>
+/* 배경 비디오 - 화면 중앙 상단에서 스크린처럼 투사 */
+#theater-video {{
     position: fixed;
     top: 0;
     left: 0;
     width: 100vw;
     height: 100vh;
-    background: radial-gradient(circle at 50% 30%, rgba(255, 215, 0, 0.05) 0%, rgba(5, 5, 10, 0.85) 80%);
-    z-index: -1;
+    object-fit: cover;
+    z-index: -3;
+    filter: brightness(0.35) contrast(1.2);
+}}
+
+/* 영화관 내부 실루엣 오버레이 (비네팅 + 영사실 빔 효과) */
+.cinema-environment {{
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -2;
     pointer-events: none;
-}
+    background: 
+        /* 상단 프로젝터 조명 */
+        radial-gradient(ellipse at 50% -10%, rgba(255, 230, 150, 0.22) 0%, transparent 60%),
+        /* 하단 객석 좌석 어둠 처리 */
+        linear-gradient(to top, rgba(10, 2, 4, 0.95) 15%, rgba(10, 2, 4, 0.6) 50%, rgba(0, 0, 0, 0.4) 100%),
+        /* 양옆 커튼 비네팅 */
+        radial-gradient(circle at center, transparent 40%, rgba(5, 0, 2, 0.85) 95%);
+}}
 
-/* 스트림릿 기본 배경을 투명화 */
-.stApp {
+/* 기본 스트림릿 배경 투명화 */
+.stApp {{
     background: transparent !important;
-    color: #F8F9FA !important;
-}
+}}
 
-/* 헤더 및 텍스트 시네마틱 골드/네온 글로우 효과 */
-h1 {
-    color: #FFE082 !important;
-    font-weight: 800 !important;
-    text-shadow: 0 0 20px rgba(255, 215, 0, 0.4), 0 2px 4px rgba(0,0,0,0.8);
-    letter-spacing: -0.5px;
-}
-h2, h3 {
-    color: #FFF !important;
-    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
-}
-
-/* 글래스모피즘(반투명 유리) 카드 컨테이너 */
-div[data-testid="stMetric"], .cinema-card {
-    background: rgba(20, 20, 30, 0.65) !important;
+/* 메인 스크린 박스 디자인 */
+.screen-frame {{
+    background: rgba(18, 12, 16, 0.72) !important;
     border: 1px solid rgba(255, 215, 0, 0.25) !important;
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5) !important;
-    backdrop-filter: blur(10px) !important;
-    -webkit-backdrop-filter: blur(10px) !important;
-    border-radius: 14px !important;
-    padding: 16px 20px !important;
-}
-
-/* 지표 레이블 및 숫자 색상 */
-div[data-testid="stMetric"] label {
-    color: #B0BEC5 !important;
-    font-size: 0.95rem !important;
-}
-div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
-    color: #FFD54F !important;
-    font-weight: 700 !important;
-}
-
-/* 데이터프레임 표 반투명화 및 스타일링 */
-div[data-testid="stDataFrame"] {
-    background: rgba(15, 15, 25, 0.65) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    border-radius: 12px !important;
-    backdrop-filter: blur(8px) !important;
-    padding: 10px !important;
-}
-
-/* 사이드바 어둡고 은은한 영화관 커튼 느낌 */
-section[data-testid="stSidebar"] {
-    background: rgba(10, 10, 15, 0.88) !important;
-    border-right: 1px solid rgba(255, 215, 0, 0.15) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.9), inset 0 1px 1px rgba(255, 255, 255, 0.1) !important;
     backdrop-filter: blur(12px) !important;
-}
+    -webkit-backdrop-filter: blur(12px) !important;
+    padding: 24px;
+    margin-bottom: 24px;
+}}
+
+/* 텍스트 골드 발광 효과 */
+h1 {{
+    color: #FFE082 !important;
+    font-weight: 900 !important;
+    letter-spacing: 1px;
+    text-shadow: 0 0 25px rgba(255, 215, 0, 0.5), 0 2px 4px #000 !important;
+}}
+h2, h3 {{
+    color: #F5F5F5 !important;
+    text-shadow: 0 2px 5px #000;
+}}
+
+/* 지표 카드 커스텀 */
+div[data-testid="stMetric"] {{
+    background: rgba(28, 18, 24, 0.75) !important;
+    border: 1px solid rgba(255, 193, 7, 0.3) !important;
+    border-radius: 12px !important;
+    padding: 16px 20px !important;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.6) !important;
+}}
+div[data-testid="stMetric"] label {{
+    color: #CFD8DC !important;
+}}
+div[data-testid="stMetricValue"] {{
+    color: #FFD54F !important;
+    font-weight: 800 !important;
+}}
+
+/* 사이드바 다크 와인 톤 */
+section[data-testid="stSidebar"] {{
+    background: rgba(14, 8, 10, 0.92) !important;
+    border-right: 1px solid rgba(255, 215, 0, 0.15) !important;
+}}
 </style>
 
-<!-- 배경 비디오: 극장/필름 프로젝터 분위기 루프 영상 -->
-<video autoplay muted loop id="bg-video" playsinline>
-    <source src="https://assets.mixkit.co/videos/preview/mixkit-dust-particles-flying-in-a-dark-room-41584-large.mp4" type="video/mp4">
+<video autoplay muted loop id="theater-video" playsinline key="{selected_video}">
+    <source src="{selected_video}" type="video/mp4">
 </video>
-<div class="theater-overlay"></div>
+<div class="cinema-environment"></div>
 """
 
-st.markdown(cinema_css_and_bg, unsafe_allow_html=True)
+st.markdown(theater_style, unsafe_allow_html=True)
 
-# 3. 역대 애니메이션 흥행 데이터셋 로드
+# 4. 애니메이션 역대 박스오피스 데이터
 @st.cache_data
 def load_animation_data():
     raw_data = [
@@ -135,83 +149,81 @@ def load_animation_data():
 
 df_all = load_animation_data()
 
-# 4. 헤더
-st.title("🎬 CINEMA THEATER: 역대 애니메이션 명예의 전당")
-st.markdown("<p style='color: #CFD8DC; font-size: 1.1rem; margin-top: -10px;'>영사실의 영롱한 빛과 함께 감상하는 한국 극장가 역대 최고 흥행작 통계</p>", unsafe_allow_html=True)
+# 5. 헤더 섹션
+st.markdown("<h1>🎟️ THE CINEMA HALL: 역대 애니메이션 박스오피스</h1>", unsafe_allow_html=True)
+st.markdown("<p style='color: #ECEFF1; font-size: 1.05rem; text-shadow: 0 1px 4px #000;'>극장 대형 스크린 너머로 만나는 대한민국 흥행 명작선</p>", unsafe_allow_html=True)
 st.write("")
 
-# 5. 사이드바 컨트롤 (영화관 매표소 느낌)
+# 6. 사이드바 필터
 with st.sidebar:
-    st.markdown("### 🎟️ 매표소 필터 (TICKET BOX)")
+    st.markdown("---")
+    st.markdown("### 🔍 상영작 검색 필터")
     country_options = ["전체 국가"] + list(df_all["국가"].unique())
-    selected_country = st.selectbox("제작 국가 선택", country_options)
+    selected_country = st.selectbox("제작 국가", country_options)
 
     min_audi = st.slider(
-        "최소 누적 관객수 (만 명)",
+        "관객수 컷오프 (만 명 이상)",
         min_value=50,
         max_value=1300,
         value=100,
         step=50
     ) * 10000
 
-    st.divider()
-    st.caption("📽️ Background: Cinema Dust & Projector Ambience")
-
-# 필터링
+# 필터 적용
 filtered_df = df_all[df_all["누적관객수"] >= min_audi].copy()
 if selected_country != "전체 국가":
     filtered_df = filtered_df[filtered_df["국가"] == selected_country]
 
 filtered_df = filtered_df.reset_index(drop=True)
-filtered_df["선택순위"] = filtered_df.index + 1
+filtered_df["표시순위"] = filtered_df.index + 1
 
-# 6. 상단 하이라이트 지표 카드 (시네마 카드 형태)
+# 7. 본문 대시보드
 if not filtered_df.empty:
     top_movie = filtered_df.iloc[0]
     total_audience = filtered_df["누적관객수"].sum()
     avg_audience = filtered_df["누적관객수"].mean()
 
-    st.markdown(f"### 🏆 현재 1위 상영작 : <span style='color:#FFE082;'>{top_movie['영화명']}</span> ({top_movie['개봉연도']})", unsafe_allow_html=True)
-    
+    # 상단 하이라이트 지표
+    st.markdown(f"### 🌟 조건 내 1위 상영작: <span style='color: #FFE082;'>{top_movie['영화명']}</span> ({top_movie['개봉연도']})", unsafe_allow_html=True)
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric(label="🥇 1위 관객수", value=f"{top_movie['누적관객수']:,}명")
+        st.metric("1위 동원 관객", f"{top_movie['누적관객수']:,} 명")
     with col2:
-        st.metric(label="🎞️ 상영 편수", value=f"{len(filtered_df)}편")
+        st.metric("선택된 상영작", f"{len(filtered_df)} 편")
     with col3:
-        st.metric(label="📊 평균 동원 관객", value=f"{int(avg_audience):,}명")
+        st.metric("편당 평균 관객", f"{int(avg_audience):,} 명")
 
     st.write("")
     st.divider()
 
-    # 7. 골드/네온 톤의 누적 관객수 시각화 차트
-    st.subheader("📊 스크린 누적 관객수 시각화")
+    # 시각화 막대 그래프
+    st.subheader("📊 스크린 누적 관객 랭킹")
     chart = (
         alt.Chart(filtered_df)
-        .mark_bar(cornerRadiusTopRight=5, cornerRadiusBottomRight=5, opacity=0.9)
+        .mark_bar(cornerRadiusTopRight=5, cornerRadiusBottomRight=5, opacity=0.92)
         .encode(
-            x=alt.X("누적관객수:Q", title="누적 관객수 (명)", axis=alt.Axis(labelColor="#FFF", titleColor="#FFE082", gridColor="#333")),
-            y=alt.Y("영화명:N", sort="-x", title="영화명", axis=alt.Axis(labelColor="#FFF", titleColor="#FFE082")),
-            color=alt.Color("국가:N", scale=alt.Scale(range=["#E50914", "#FFD700", "#00B4D8"]), legend=alt.Legend(title="국가", labelColor="#FFF", titleColor="#FFE082")),
+            x=alt.X("누적관객수:Q", title="누적 관객수 (명)", axis=alt.Axis(labelColor="#FFF", titleColor="#FFE082", gridColor="rgba(255,255,255,0.1)")),
+            y=alt.Y("영화명:N", sort="-x", title="", axis=alt.Axis(labelColor="#FFF")),
+            color=alt.Color("국가:N", scale=alt.Scale(range=["#E50914", "#FFC107", "#00BCD4"]), legend=alt.Legend(title="국가", labelColor="#FFF", titleColor="#FFE082")),
             tooltip=[
-                alt.Tooltip("선택순위:Q", title="순위"),
+                alt.Tooltip("표시순위:Q", title="순위"),
                 alt.Tooltip("영화명:N", title="영화명"),
                 alt.Tooltip("개봉연도:Q", title="개봉연도"),
                 alt.Tooltip("국가:N", title="국가"),
                 alt.Tooltip("누적관객수:Q", title="누적 관객수", format=","),
             ]
         )
-        .properties(height=max(220, len(filtered_df) * 36))
+        .properties(height=max(200, len(filtered_df) * 36))
         .configure_view(strokeOpacity=0)
         .configure(background="transparent")
     )
     st.altair_chart(chart, use_container_width=True)
 
     st.write("")
-    
-    # 8. 영화 순위 목록 표
-    st.subheader("📋 전체 박스오피스 리스트")
-    display_df = filtered_df[["선택순위", "역대순위", "영화명", "개봉연도", "국가", "누적관객수", "배급사"]].copy()
+
+    # 데이터 테이블
+    st.subheader("📋 전체 순위 리스트")
+    display_df = filtered_df[["표시순위", "역대순위", "영화명", "개봉연도", "국가", "누적관객수", "배급사"]].copy()
     display_df.columns = ["순위", "역대 순위", "영화명", "개봉연도", "국가", "누적 관객수", "배급사"]
 
     st.dataframe(
@@ -225,4 +237,4 @@ if not filtered_df.empty:
         hide_index=True
     )
 else:
-    st.warning("선택하신 조건에 해당하는 영화가 없습니다. 사이드바 필터를 조정해 주세요.")
+    st.warning("선택하신 조건에 일치하는 영화가 없습니다. 사이드바 필터를 변경해 보세요.")
