@@ -1,180 +1,129 @@
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
-import altair as alt
-import pandas as pd
-import requests
 import streamlit as st
+import pandas as pd
+import altair as alt
 
-# 1. 페이지 기본 설정
+# 1. 페이지 설정
 st.set_page_config(
-    page_title="어제 애니메이션 박스오피스",
+    page_title="역대 애니메이션 영화 흥행 순위",
     page_icon="🎬",
     layout="wide"
 )
 
-# 2. 한국 시간(KST) 기준 '어제' 날짜 계산 함수
-def get_yesterday_kst():
-    kst = ZoneInfo("Asia/Seoul")
-    now_kst = datetime.now(kst)
-    yesterday_kst = now_kst - timedelta(days=1)
-    target_dt = yesterday_kst.strftime("%Y%m%d")
-    display_dt = yesterday_kst.strftime("%Y년 %m월 %d일")
-    return target_dt, display_dt
+# 2. 역대 대표 애니메이션 영화 흥행 데이터셋 (영화진흥위원회 KOBIS 공식 통계 기반)
+@st.cache_data
+def load_animation_data():
+    raw_data = [
+        {"순위": 1, "영화명": "겨울왕국 2", "개봉연도": 2019, "국가": "미국", "누적관객수": 13768797, "배급사": "월트디즈니"},
+        {"순위": 2, "영화명": "겨울왕국", "개봉연도": 2014, "국가": "미국", "누적관객수": 10329222, "배급사": "월트디즈니"},
+        {"순위": 3, "영화명": "인사이드 아웃 2", "개봉연도": 2024, "국가": "미국", "누적관객수": 8799611, "배급사": "월트디즈니"},
+        {"순위": 4, "영화명": "엘리멘탈", "개봉연도": 2023, "국가": "미국", "누적관객수": 7241486, "배급사": "월트디즈니"},
+        {"순위": 5, "영화명": "스즈메의 문단속", "개봉연도": 2023, "국가": "일본", "누적관객수": 5641721, "배급사": "쇼박스"},
+        {"순위": 6, "영화명": "쿵푸팬더 2", "개봉연도": 2011, "국가": "미국", "누적관객수": 5073037, "배급사": "CJ ENM"},
+        {"순위": 7, "영화명": "인사이드 아웃", "개봉연도": 2015, "국가": "미국", "누적관객수": 4972640, "배급사": "월트디즈니"},
+        {"순위": 8, "영화명": "더 퍼스트 슬램덩크", "개봉연도": 2023, "국가": "일본", "누적관객수": 4921209, "배급사": "NEW"},
+        {"순위": 9, "영화명": "쿵푸팬더", "개봉연도": 2008, "국가": "미국", "누적관객수": 4673009, "배급사": "CJ ENM"},
+        {"순위": 10, "영화명": "주토피아", "개봉연도": 2016, "국가": "미국", "누적관객수": 4707362, "배급사": "월트디즈니"},
+        {"순위": 11, "영화명": "너의 이름은.", "개봉연도": 2017, "국가": "일본", "누적관객수": 3979592, "배급사": "메가박스"},
+        {"순위": 12, "영화명": "쿵푸팬더 3", "개봉연도": 2016, "국가": "미국", "누적관객수": 3984814, "배급사": "CJ ENM"},
+        {"순위": 13, "영화명": "슈퍼배드 3", "개봉연도": 2017, "국가": "미국", "누적관객수": 3324879, "배급사": "UPI"},
+        {"순위": 14, "영화명": "하울의 움직이는 성", "개봉연도": 2004, "국가": "일본", "누적관객수": 3015165, "배급사": "대원미디어"},
+        {"순위": 15, "영화명": "마당을 나온 암탉", "개봉연도": 2011, "국가": "한국", "누적관객수": 2223145, "배급사": "롯데엔터테인먼트"},
+        {"순위": 16, "영화명": "극장판 귀멸의 칼날: 무한열차편", "개봉연도": 2021, "국가": "일본", "누적관객수": 2221338, "배급사": "워터홀컴퍼니"},
+        {"순위": 17, "영화명": "센과 치히로의 행방불명", "개봉연도": 2002, "국가": "일본", "누적관객수": 2167573, "배급사": "브에나비스타"},
+        {"순위": 18, "영화명": "그대들은 어떻게 살 것인가", "개봉연도": 2023, "국가": "일본", "누적관객수": 2015965, "배급사": "메가박스"},
+        {"순위": 19, "영화명": "사랑의 하츄핑", "개봉연도": 2024, "국가": "한국", "누적관객수": 1259120, "배급사": "쇼박스"},
+        {"순위": 20, "영화명": "점박이: 한반도의 공룡 3D", "개봉연도": 2012, "국가": "한국", "누적관객수": 1051710, "배급사": "CJ ENM"},
+    ]
+    df = pd.DataFrame(raw_data)
+    # 누적 관객수 기준 내림차순 정렬 및 순위 재지정
+    df = df.sort_values(by="누적관객수", ascending=False).reset_index(drop=True)
+    df["순위"] = df.index + 1
+    return df
 
-# 3. KOBIS 일별 박스오피스 API 호출
-def fetch_box_office(api_key, target_dt):
-    url = "https://www.kobis.or.kr/kobisopenapi/webservice/rest/boxoffice/searchDailyBoxOfficeList.json"
-    params = {"key": api_key, "targetDt": target_dt}
-    try:
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-        return response.json(), None
-    except requests.exceptions.RequestException as e:
-        return None, f"네트워크 통신 오류가 발생했습니다: {e}"
+df_all = load_animation_data()
 
-# 4. 영화 상세정보 API를 통해 '애니메이션' 장르 여부 확인 (캐싱 적용)
-@st.cache_data(ttl=3600)  # 동일 영화 정보는 1시간 동안 캐시 유지
-def get_movie_genres(api_key, movie_cd):
-    url = "https://www.kobis.or.kr/kobisopenapi/webservice/rest/movie/searchMovieInfo.json"
-    params = {"key": api_key, "movieCd": movie_cd}
-    try:
-        res = requests.get(url, params=params, timeout=5)
-        if res.status_code == 200:
-            movie_info = res.json().get("movieInfoResult", {}).get("movieInfo", {})
-            # genres: [{'genreNm': '애니메이션'}, {'genreNm': '모험'}] 형태
-            genres = [g.get("genreNm") for g in movie_info.get("genres", [])]
-            return genres
-    except Exception:
-        pass
-    return []
+# 3. 타이틀 및 대시보드 헤더
+st.title("🏆 대한민국 역대 애니메이션 흥행 순위")
+st.caption("영화진흥위원회(KOBIS) 통합전산망 공식 누적 관객수 기준 집계 데이터")
 
-# --- 화면 렌더링 시작 ---
+# 4. 사이드바 필터링 컨트롤
+st.sidebar.header("🔍 필터 옵션")
 
-target_dt, display_dt = get_yesterday_kst()
+# 국가 필터
+country_options = ["전체"] + list(df_all["국가"].unique())
+selected_country = st.sidebar.selectbox("제작 국가 선택", country_options)
 
-st.title("🍿 어제 애니메이션 박스오피스")
-st.caption(f"기준 일자: **{display_dt}** (한국 표준시 기준 / 전체 박스오피스 중 '애니메이션' 장르 추출)")
+# 관객수 필터 (슬라이더)
+min_audi = st.sidebar.slider(
+    "최소 누적 관객수 (만 명)",
+    min_value=50,
+    max_value=1300,
+    value=100,
+    step=50
+) * 10000
 
-# secrets(비밀 금고) 키 확인
-if "KOBIS_KEY" not in st.secrets:
-    st.error("""
-    **[설정 오류] API 인증키를 찾을 수 없습니다.**  
-    Streamlit Cloud 설정(Secrets)에 `KOBIS_KEY`를 등록해 주세요.
-    """)
-    st.stop()
+# 필터 적용
+filtered_df = df_all[df_all["누적관객수"] >= min_audi]
+if selected_country != "전체":
+    filtered_df = filtered_df[filtered_df["국가"] == selected_country]
 
-api_key = st.secrets["KOBIS_KEY"]
+filtered_df = filtered_df.reset_index(drop=True)
+filtered_df["선택조건 순위"] = filtered_df.index + 1
 
-# API 호출 및 데이터 로드
-with st.spinner("박스오피스 및 장르 정보를 분석하는 중입니다..."):
-    data, net_error = fetch_box_office(api_key, target_dt)
+# 5. 핵심 하이라이트 지표 카드
+if not filtered_df.empty:
+    top_movie = filtered_df.iloc[0]
+    total_audience = filtered_df["누적관객수"].sum()
+    avg_audience = filtered_df["누적관객수"].mean()
 
-# 예외 처리: 통신 실패
-if net_error:
-    st.error(net_error)
-    st.stop()
-
-# 예외 처리: 인증키 에러 등 KOBIS 자체 오류
-if "faultInfo" in data:
-    fault = data["faultInfo"]
-    st.error(f"**[KOBIS API 오류]** {fault.get('message', '알 수 없는 오류')} (코드: {fault.get('errorCode')})")
-    st.stop()
-
-movie_list = data.get("boxOfficeResult", {}).get("dailyBoxOfficeList", [])
-
-if not movie_list:
-    st.warning("조회된 박스오피스 데이터가 비어 있습니다.")
-    st.stop()
-
-# 5. 각 영화별 장르 조회 후 '애니메이션' 필터링
-anime_movies = []
-for movie in movie_list:
-    movie_cd = movie.get("movieCd")
-    genres = get_movie_genres(api_key, movie_cd)
+    st.subheader(f"🥇 조건 내 1위: {top_movie['영화명']} ({top_movie['개봉연도']})")
     
-    # 장르 목록에 '애니메이션'이 포함되어 있는지 확인
-    if "애니메이션" in genres:
-        movie["genres"] = ", ".join(genres)
-        anime_movies.append(movie)
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric(label="1위 누적 관객수", value=f"{top_movie['누적관객수']:,}명")
+    with col2:
+        st.metric(label="조회된 작품 수", value=f"{len(filtered_df)}편")
+    with col3:
+        st.metric(label="조회 작품 평균 관객수", value=f"{int(avg_audience):,}명")
 
-# 애니메이션 영화가 순위에 없을 경우 안내
-if not anime_movies:
-    st.info(f"💡 {display_dt} 박스오피스 10위권 내에 상영 중인 **애니메이션** 영화가 없습니다.")
-    st.stop()
+    st.divider()
 
-# 6. 데이터프레임 변환 및 숫자형 변환
-df = pd.DataFrame(anime_movies)
-numeric_cols = ["rank", "audiCnt", "audiAcc", "scrnCnt"]
-for col in numeric_cols:
-    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
-
-# 애니메이션 전용 순위 부여 (박스오피스 전체 순위와 구분)
-df["animeRank"] = range(1, len(df) + 1)
-
-# 7. 애니메이션 1위 영화 지표 카드 (Metric Cards)
-top_anime = df.iloc[0]
-
-st.subheader(f"🏆 애니메이션 1위: {top_anime['movieNm']}")
-st.caption(f"전체 박스오피스 순위: **{int(top_anime['rank'])}위** | 장르: {top_anime['genres']}")
-
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric(label="당일 관람객수", value=f"{int(top_anime['audiCnt']):,}명")
-with col2:
-    st.metric(label="누적 관객수", value=f"{int(top_anime['audiAcc']):,}명")
-with col3:
-    st.metric(label="확보 스크린수", value=f"{int(top_anime['scrnCnt']):,}개")
-
-st.divider()
-
-# 8. 관객수 비교 막대그래프
-st.subheader("📊 애니메이션 당일 관람객수 비교")
-chart = (
-    alt.Chart(df)
-    .mark_bar(cornerRadiusTopRight=5, cornerRadiusBottomRight=5)
-    .encode(
-        x=alt.X("audiCnt:Q", title="당일 관객수 (명)"),
-        y=alt.Y("movieNm:N", sort="-x", title="영화명"),
-        color=alt.Color("audiCnt:Q", legend=None, scale=alt.Scale(scheme="oranges")),
-        tooltip=[
-            alt.Tooltip("animeRank:Q", title="애니 순위"),
-            alt.Tooltip("rank:Q", title="전체 순위"),
-            alt.Tooltip("movieNm:N", title="영화명"),
-            alt.Tooltip("audiCnt:Q", title="당일 관객수", format=","),
-            alt.Tooltip("audiAcc:Q", title="누적 관객수", format=","),
-            alt.Tooltip("scrnCnt:Q", title="스크린수", format=","),
-        ],
+    # 6. 관객수 비교 차트
+    st.subheader("📊 누적 관객수 비교 시각화")
+    chart = (
+        alt.Chart(filtered_df)
+        .mark_bar(cornerRadiusTopRight=4, cornerRadiusBottomRight=4)
+        .encode(
+            x=alt.X("누적관객수:Q", title="누적 관객수 (명)"),
+            y=alt.Y("영화명:N", sort="-x", title="영화명"),
+            color=alt.Color("국가:N", legend=alt.Legend(title="국가")),
+            tooltip=[
+                alt.Tooltip("선택조건 순위:Q", title="순위"),
+                alt.Tooltip("영화명:N", title="영화명"),
+                alt.Tooltip("개봉연도:Q", title="개봉연도"),
+                alt.Tooltip("국가:N", title="국가"),
+                alt.Tooltip("누적관객수:Q", title="누적 관객수", format=","),
+            ]
+        )
+        .properties(height=max(200, len(filtered_df) * 35))
     )
-    .properties(height=max(150, len(df) * 55))
-)
-st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, use_container_width=True)
 
-# 9. 애니메이션 순위표 출력
-st.subheader("📋 애니메이션 순위 및 상세 지표")
-
-display_df = df[
-    ["animeRank", "rank", "movieNm", "openDt", "genres", "audiCnt", "audiAcc", "scrnCnt"]
-].copy()
-
-display_df.columns = [
-    "애니 순위",
-    "전체 순위",
-    "영화명",
-    "개봉일",
-    "장르",
-    "당일 관객수",
-    "누적 관객수",
-    "확보 스크린수",
-]
-
-st.dataframe(
-    display_df.style.format({
-        "애니 순위": "{:,.0f}위",
-        "전체 순위": "{:,.0f}위",
-        "당일 관객수": "{:,.0f}명",
-        "누적 관객수": "{:,.0f}명",
-        "확보 스크린수": "{:,.0f}개",
-    }),
-    use_container_width=True,
-    hide_index=True,
-)
+    # 7. 전체 상세 표
+    st.subheader("📋 순위 목록표")
+    
+    display_df = filtered_df[["선택조건 순위", "순위", "영화명", "개봉연도", "국가", "누적관객수", "배급사"]].copy()
+    display_df.columns = ["조건 순위", "역대 순위", "영화명", "개봉연도", "국가", "누적 관객수", "배급사"]
+    
+    st.dataframe(
+        display_df.style.format({
+            "조건 순위": "{:d}위",
+            "역대 순위": "{:d}위",
+            "개봉연도": "{:d}년",
+            "누적 관객수": "{:,.0f}명"
+        }),
+        use_container_width=True,
+        hide_index=True
+    )
+else:
+    st.warning("선택하신 조건(국가/관객수)에 맞는 영화 데이터가 없습니다. 사이드바 필터를 조정해 보세요.")
