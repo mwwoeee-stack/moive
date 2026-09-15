@@ -2,14 +2,108 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 
-# 1. 페이지 설정
+# 1. 페이지 기본 설정 (넓은 화면, 다크 테마 느낌)
 st.set_page_config(
-    page_title="역대 애니메이션 영화 흥행 순위",
-    page_icon="🎬",
+    page_title="시네마 애니메이션 박스오피스",
+    page_icon="🍿",
     layout="wide"
 )
 
-# 2. 역대 대표 애니메이션 영화 흥행 데이터셋 (영화진흥위원회 KOBIS 공식 통계 기반)
+# 2. 영화관 배경 영상 및 시네마 스타일 CSS 주입
+cinema_css_and_bg = """
+<style>
+/* 배경 비디오 스타일 */
+#bg-video {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    min-width: 100%;
+    min-height: 100%;
+    width: auto;
+    height: auto;
+    z-index: -2;
+    object-fit: cover;
+    filter: brightness(0.28) contrast(1.15) saturate(1.1); /* 텍스트 가독성을 위해 어둡게 처리 */
+}
+
+/* 영화관 앰비언트 오버레이 (비네팅 및 극장 분위기) */
+.theater-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: radial-gradient(circle at 50% 30%, rgba(255, 215, 0, 0.05) 0%, rgba(5, 5, 10, 0.85) 80%);
+    z-index: -1;
+    pointer-events: none;
+}
+
+/* 스트림릿 기본 배경을 투명화 */
+.stApp {
+    background: transparent !important;
+    color: #F8F9FA !important;
+}
+
+/* 헤더 및 텍스트 시네마틱 골드/네온 글로우 효과 */
+h1 {
+    color: #FFE082 !important;
+    font-weight: 800 !important;
+    text-shadow: 0 0 20px rgba(255, 215, 0, 0.4), 0 2px 4px rgba(0,0,0,0.8);
+    letter-spacing: -0.5px;
+}
+h2, h3 {
+    color: #FFF !important;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+}
+
+/* 글래스모피즘(반투명 유리) 카드 컨테이너 */
+div[data-testid="stMetric"], .cinema-card {
+    background: rgba(20, 20, 30, 0.65) !important;
+    border: 1px solid rgba(255, 215, 0, 0.25) !important;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border-radius: 14px !important;
+    padding: 16px 20px !important;
+}
+
+/* 지표 레이블 및 숫자 색상 */
+div[data-testid="stMetric"] label {
+    color: #B0BEC5 !important;
+    font-size: 0.95rem !important;
+}
+div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
+    color: #FFD54F !important;
+    font-weight: 700 !important;
+}
+
+/* 데이터프레임 표 반투명화 및 스타일링 */
+div[data-testid="stDataFrame"] {
+    background: rgba(15, 15, 25, 0.65) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 12px !important;
+    backdrop-filter: blur(8px) !important;
+    padding: 10px !important;
+}
+
+/* 사이드바 어둡고 은은한 영화관 커튼 느낌 */
+section[data-testid="stSidebar"] {
+    background: rgba(10, 10, 15, 0.88) !important;
+    border-right: 1px solid rgba(255, 215, 0, 0.15) !important;
+    backdrop-filter: blur(12px) !important;
+}
+</style>
+
+<!-- 배경 비디오: 극장/필름 프로젝터 분위기 루프 영상 -->
+<video autoplay muted loop id="bg-video" playsinline>
+    <source src="https://assets.mixkit.co/videos/preview/mixkit-dust-particles-flying-in-a-dark-room-41584-large.mp4" type="video/mp4">
+</video>
+<div class="theater-overlay"></div>
+"""
+
+st.markdown(cinema_css_and_bg, unsafe_allow_html=True)
+
+# 3. 역대 애니메이션 흥행 데이터셋 로드
 @st.cache_data
 def load_animation_data():
     raw_data = [
@@ -35,89 +129,94 @@ def load_animation_data():
         {"순위": 20, "영화명": "점박이: 한반도의 공룡 3D", "개봉연도": 2012, "국가": "한국", "누적관객수": 1051710, "배급사": "CJ ENM"},
     ]
     df = pd.DataFrame(raw_data)
-    # 누적 관객수 기준 내림차순 정렬 및 순위 재지정
     df = df.sort_values(by="누적관객수", ascending=False).reset_index(drop=True)
-    df["순위"] = df.index + 1
+    df["역대순위"] = df.index + 1
     return df
 
 df_all = load_animation_data()
 
-# 3. 타이틀 및 대시보드 헤더
-st.title("🏆 대한민국 역대 애니메이션 흥행 순위")
-st.caption("영화진흥위원회(KOBIS) 통합전산망 공식 누적 관객수 기준 집계 데이터")
+# 4. 헤더
+st.title("🎬 CINEMA THEATER: 역대 애니메이션 명예의 전당")
+st.markdown("<p style='color: #CFD8DC; font-size: 1.1rem; margin-top: -10px;'>영사실의 영롱한 빛과 함께 감상하는 한국 극장가 역대 최고 흥행작 통계</p>", unsafe_allow_html=True)
+st.write("")
 
-# 4. 사이드바 필터링 컨트롤
-st.sidebar.header("🔍 필터 옵션")
+# 5. 사이드바 컨트롤 (영화관 매표소 느낌)
+with st.sidebar:
+    st.markdown("### 🎟️ 매표소 필터 (TICKET BOX)")
+    country_options = ["전체 국가"] + list(df_all["국가"].unique())
+    selected_country = st.selectbox("제작 국가 선택", country_options)
 
-# 국가 필터
-country_options = ["전체"] + list(df_all["국가"].unique())
-selected_country = st.sidebar.selectbox("제작 국가 선택", country_options)
+    min_audi = st.slider(
+        "최소 누적 관객수 (만 명)",
+        min_value=50,
+        max_value=1300,
+        value=100,
+        step=50
+    ) * 10000
 
-# 관객수 필터 (슬라이더)
-min_audi = st.sidebar.slider(
-    "최소 누적 관객수 (만 명)",
-    min_value=50,
-    max_value=1300,
-    value=100,
-    step=50
-) * 10000
+    st.divider()
+    st.caption("📽️ Background: Cinema Dust & Projector Ambience")
 
-# 필터 적용
-filtered_df = df_all[df_all["누적관객수"] >= min_audi]
-if selected_country != "전체":
+# 필터링
+filtered_df = df_all[df_all["누적관객수"] >= min_audi].copy()
+if selected_country != "전체 국가":
     filtered_df = filtered_df[filtered_df["국가"] == selected_country]
 
 filtered_df = filtered_df.reset_index(drop=True)
-filtered_df["선택조건 순위"] = filtered_df.index + 1
+filtered_df["선택순위"] = filtered_df.index + 1
 
-# 5. 핵심 하이라이트 지표 카드
+# 6. 상단 하이라이트 지표 카드 (시네마 카드 형태)
 if not filtered_df.empty:
     top_movie = filtered_df.iloc[0]
     total_audience = filtered_df["누적관객수"].sum()
     avg_audience = filtered_df["누적관객수"].mean()
 
-    st.subheader(f"🥇 조건 내 1위: {top_movie['영화명']} ({top_movie['개봉연도']})")
+    st.markdown(f"### 🏆 현재 1위 상영작 : <span style='color:#FFE082;'>{top_movie['영화명']}</span> ({top_movie['개봉연도']})", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric(label="1위 누적 관객수", value=f"{top_movie['누적관객수']:,}명")
+        st.metric(label="🥇 1위 관객수", value=f"{top_movie['누적관객수']:,}명")
     with col2:
-        st.metric(label="조회된 작품 수", value=f"{len(filtered_df)}편")
+        st.metric(label="🎞️ 상영 편수", value=f"{len(filtered_df)}편")
     with col3:
-        st.metric(label="조회 작품 평균 관객수", value=f"{int(avg_audience):,}명")
+        st.metric(label="📊 평균 동원 관객", value=f"{int(avg_audience):,}명")
 
+    st.write("")
     st.divider()
 
-    # 6. 관객수 비교 차트
-    st.subheader("📊 누적 관객수 비교 시각화")
+    # 7. 골드/네온 톤의 누적 관객수 시각화 차트
+    st.subheader("📊 스크린 누적 관객수 시각화")
     chart = (
         alt.Chart(filtered_df)
-        .mark_bar(cornerRadiusTopRight=4, cornerRadiusBottomRight=4)
+        .mark_bar(cornerRadiusTopRight=5, cornerRadiusBottomRight=5, opacity=0.9)
         .encode(
-            x=alt.X("누적관객수:Q", title="누적 관객수 (명)"),
-            y=alt.Y("영화명:N", sort="-x", title="영화명"),
-            color=alt.Color("국가:N", legend=alt.Legend(title="국가")),
+            x=alt.X("누적관객수:Q", title="누적 관객수 (명)", axis=alt.Axis(labelColor="#FFF", titleColor="#FFE082", gridColor="#333")),
+            y=alt.Y("영화명:N", sort="-x", title="영화명", axis=alt.Axis(labelColor="#FFF", titleColor="#FFE082")),
+            color=alt.Color("국가:N", scale=alt.Scale(range=["#E50914", "#FFD700", "#00B4D8"]), legend=alt.Legend(title="국가", labelColor="#FFF", titleColor="#FFE082")),
             tooltip=[
-                alt.Tooltip("선택조건 순위:Q", title="순위"),
+                alt.Tooltip("선택순위:Q", title="순위"),
                 alt.Tooltip("영화명:N", title="영화명"),
                 alt.Tooltip("개봉연도:Q", title="개봉연도"),
                 alt.Tooltip("국가:N", title="국가"),
                 alt.Tooltip("누적관객수:Q", title="누적 관객수", format=","),
             ]
         )
-        .properties(height=max(200, len(filtered_df) * 35))
+        .properties(height=max(220, len(filtered_df) * 36))
+        .configure_view(strokeOpacity=0)
+        .configure(background="transparent")
     )
     st.altair_chart(chart, use_container_width=True)
 
-    # 7. 전체 상세 표
-    st.subheader("📋 순위 목록표")
+    st.write("")
     
-    display_df = filtered_df[["선택조건 순위", "순위", "영화명", "개봉연도", "국가", "누적관객수", "배급사"]].copy()
-    display_df.columns = ["조건 순위", "역대 순위", "영화명", "개봉연도", "국가", "누적 관객수", "배급사"]
-    
+    # 8. 영화 순위 목록 표
+    st.subheader("📋 전체 박스오피스 리스트")
+    display_df = filtered_df[["선택순위", "역대순위", "영화명", "개봉연도", "국가", "누적관객수", "배급사"]].copy()
+    display_df.columns = ["순위", "역대 순위", "영화명", "개봉연도", "국가", "누적 관객수", "배급사"]
+
     st.dataframe(
         display_df.style.format({
-            "조건 순위": "{:d}위",
+            "순위": "{:d}위",
             "역대 순위": "{:d}위",
             "개봉연도": "{:d}년",
             "누적 관객수": "{:,.0f}명"
@@ -126,4 +225,4 @@ if not filtered_df.empty:
         hide_index=True
     )
 else:
-    st.warning("선택하신 조건(국가/관객수)에 맞는 영화 데이터가 없습니다. 사이드바 필터를 조정해 보세요.")
+    st.warning("선택하신 조건에 해당하는 영화가 없습니다. 사이드바 필터를 조정해 주세요.")
