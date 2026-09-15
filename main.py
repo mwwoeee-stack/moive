@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import altair as alt
 import pandas as pd
-import pytz
 import requests
 import streamlit as st
 
@@ -11,12 +11,13 @@ st.set_page_config(
 )
 
 
-# 2. 한국 시간(KST) 기준 '어제' 날짜 계산 함수
+# 2. 한국 시간(KST) 기준 '어제' 날짜 계산 함수 (파이썬 기본 내장 zoneinfo 사용)
 def get_yesterday_kst():
-    # 서버 시간대와 무관하게 서울 시간대를 강제로 적용합니다.
-    kst = pytz.timezone("Asia/Seoul")
+    # 서버 시간대와 무관하게 서울 시간대를 적용합니다.
+    kst = ZoneInfo("Asia/Seoul")
     now_kst = datetime.now(kst)
     yesterday_kst = now_kst - timedelta(days=1)
+
     # API 요청 규격(YYYYMMDD)과 화면 표시 규격(YYYY-MM-DD)으로 변환
     target_dt = yesterday_kst.strftime("%Y%m%d")
     display_dt = yesterday_kst.strftime("%Y년 %m월 %d일")
@@ -30,7 +31,6 @@ def fetch_box_office(api_key, target_dt):
 
     try:
         response = requests.get(url, params=params, timeout=10)
-        # 네트워크/HTTP 에러 체크
         response.raise_for_status()
         return response.json(), None
     except requests.exceptions.RequestException as e:
@@ -121,7 +121,6 @@ st.divider()
 st.subheader("📊 일일 관객수 TOP 5")
 top_5_df = df.head(5).copy()
 
-# 막대그래프 생성 (순위 역전 방지를 위해 Y축 정렬 지정)
 chart = (
     alt.Chart(top_5_df)
     .mark_bar(cornerRadiusTopRight=5, cornerRadiusBottomRight=5)
@@ -156,7 +155,6 @@ display_table.columns = [
     "스크린수",
 ]
 
-# 관객수/스크린수에 천 단위 콤마 포맷 적용
 st.dataframe(
     display_table.style.format(
         {"당일 관객수": "{:,.0f}명", "누적 관객수": "{:,.0f}명", "스크린수": "{:,.0f}개"}
